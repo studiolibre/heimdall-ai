@@ -63,10 +63,15 @@ MORTO=http://127.0.0.1:9
 AMBIENTE=(STUDIO_NUVEM=0 STUDIO_HUB_MOTOR=interno STUDIO_AGENTE_URL=$MORTO OLLAMA_URL=$MORTO STUDIO_PERGUNTAR_LLM_URL=$MORTO/v1/chat/completions STUDIO_SAUDE_LLM_URL=$MORTO/v1/chat/completions STUDIO_NEWS_LLM_URL=$MORTO/v1/chat/completions STUDIO_LITELLM_URL=$MORTO/v1/chat/completions)
 FALSOS="$(mktemp -d)"   # open, xdg-open e docker de mentira: nenhum teste abre o navegador, nem fala com contêiner de verdade
 for n in open xdg-open docker; do printf '#!/bin/sh\nexit 1\n' > "$FALSOS/$n"; chmod +x "$FALSOS/$n"; done
-for v in PLAYWRIGHT_BROWSERS_PATH XDG_CACHE_HOME HOME PATH LANG LC_ALL TZ TMPDIR USER SHELL TERM SSL_CERT_FILE REQUESTS_CA_BUNDLE NODE_EXTRA_CA_CERTS HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy; do
+for v in PLAYWRIGHT_BROWSERS_PATH XDG_CACHE_HOME HOME PATH LANG LC_ALL TZ TMPDIR USER SHELL TERM SSL_CERT_FILE REQUESTS_CA_BUNDLE NODE_EXTRA_CA_CERTS ; do
   [ -n "${!v:-}" ] && AMBIENTE+=("$v=${!v}")
 done
-AMBIENTE+=("PATH=$FALSOS:$PATH")   # vale o último PATH da lista
+AMBIENTE+=("PATH=$FALSOS:$PATH")
+if [ "$VIVO" = 1 ]; then   # testes ao vivo: usam a rede (e o proxy do ambiente, se houver)
+  for v in HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy; do [ -n "${!v:-}" ] && AMBIENTE+=("$v=${!v}"); done
+else   # sem rede: qualquer acesso externo que o teste esqueça de simular falha na hora (só 127.0.0.1 e localhost funcionam)
+  AMBIENTE+=("HTTP_PROXY=$MORTO" "HTTPS_PROXY=$MORTO" "ALL_PROXY=$MORTO" "http_proxy=$MORTO" "https_proxy=$MORTO" "all_proxy=$MORTO" "NO_PROXY=127.0.0.1,localhost,::1" "no_proxy=127.0.0.1,localhost,::1")
+fi   # vale o último PATH da lista
 SAIDA="$(mktemp)"; COPIA=""
 trap 'rm -f "$SAIDA"; rm -rf "$FALSOS"; [ -n "$COPIA" ] && rm -rf "$COPIA"' EXIT
 # Cópia só do código (arquivos do git, sem .env, bancos nem dados): o teste nunca lê nem grava nos seus dados reais
